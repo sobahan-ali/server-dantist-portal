@@ -52,7 +52,20 @@ run()
 const appointmentCollection = client.db('dbDantist').collection('appointmentOptions');
 const bookingCollection = client.db('dbDantist').collection('bookings');
 const usersCollection = client.db('dbDantist').collection('users');
+const doctorCollection = client.db('dbDantist').collection('doctors');
 
+// verify admin middle were
+const adminVerify = async (req, res, next) => {
+    console.log('inside admin verify', req.decoded.email);
+    const decodedEmail = req.decoded.email;
+    const query = { email: decodedEmail };
+    const user = await usersCollection.findOne(query);
+
+    if (user?.role !== 'admin') {
+        return res.status(403).send({ message: 'forbidden access' })
+    }
+    next()
+}
 
 //endpoint
 //get all data in appointmentOption
@@ -77,6 +90,41 @@ app.get('/appointmentOption', async (req, res) => {
 
     } catch (error) {
         console.error(error.name.bgRed, error.message.italic);
+    }
+})
+
+// add a doctor api end point
+app.post('/addDoctor', verifyJWT, adminVerify, async (req, res) => {
+    try {
+        const addDoctor = req.body;
+        const doctor = await doctorCollection.insertOne(addDoctor);
+        res.send(doctor)
+    } catch (error) {
+
+        console.error(error.name.bgRed, error.message.italic)
+    }
+})
+
+// get all doctors
+app.get('/doctors', verifyJWT, adminVerify, async (req, res) => {
+    try {
+        const query = {};
+        const doctors = await doctorCollection.find(query).toArray()
+        res.send(doctors)
+    } catch (error) {
+        console.error(error.name.bgRed, error.message.italic);
+    }
+})
+
+// // delete doctor with id 
+app.delete('/doctors/:id', verifyJWT, adminVerify, async (req, res) => {
+    try {
+        const id = req.params.id;
+        const query = { _id: ObjectId(id) };
+        const doctor = await doctorCollection.deleteOne(query);
+        res.send(doctor)
+    } catch (error) {
+        console.error(error.name.bgRed, error.message.italic)
     }
 })
 
@@ -161,7 +209,7 @@ app.get('/jwt', async (req, res) => {
     const user = await usersCollection.findOne(query);
 
     if (user) {
-        const token = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: '10h' });
+        const token = jwt.sign({ email }, process.env.JWT_SECRET, { expiresIn: '7d' });
         return res.send({ accessToken: token })
     }
     res.status(403).send({ accessToken: '' })
@@ -183,15 +231,8 @@ app.get('/users/admin/:email', async (req, res) => {
 })
 
 //make admin with put method
-app.put('/users/admin/:id', verifyJWT, async (req, res) => {
+app.put('/users/admin/:id', verifyJWT, adminVerify, async (req, res) => {
     try {
-        const decodedEmail = req.decoded.email;
-        const query = { email: decodedEmail };
-        const user = await usersCollection.findOne(query);
-
-        if (user?.role !== 'admin') {
-            return res.status(403).send({ message: 'forbidden access' })
-        }
         const id = req.params.id;
         const filter = { _id: ObjectId(id) };
         const options = { upsert: true };
